@@ -15,6 +15,8 @@ SD card read/write
 
 // Debug control (>0 on, <=0 off)
 #define DEBUG 1
+// Use running totals or iterative solution
+#define USERT 1
 
 // Not usable, for reference
 #define SD_MOSI 11
@@ -94,6 +96,9 @@ int[][]   mSample = new int[EXPECTED_SAMPLES][DIM];
 int[]   a = new int[DIM];
 float[] g = new float[DIM];
 int[]   m = new int[DIM];
+float[] aAvg = new float[DIM];
+float[] gAvg = new float[DIM];
+float[] mAvg = new float[DIM];
 
 void setup() {
   #if DEBUG > 0
@@ -119,10 +124,38 @@ void loop() {
 }
 
 void takeEntry() {
-  
+  for(int i = 0; i < DIM; i++) {
+    for(int j = 0; j < AVG; j++) {
+      aData[entries][j][i] = aRange[j][i];
+      gData[entries][j][i] = gRange[j][i];
+      mData[entries][j][i] = mRange[j][i];
+    }
+
+// Todo Here
+
+    #if USERT > 0
+      // Use running totals
+      aTotal[i] = a[i];
+      gTotal[i] = g[i];
+      mTotal[i] = m[i];
+    #else
+      // Use samples
+      aSample[0][i] = a[i];
+      gSample[0][i] = g[i];
+      mSample[0][i] = m[i];
+    #endif
+
+    
+    aData[entries][AVG][i] = ;
+    gData[entries][AVG][i] = ;
+    mData[entries][AVG][i] = ;
+  }
 }
 
 void takeSample() {
+  #if DEBUG > 0
+    Serial.println("Taking sample "+String(samples));
+  #endif
   
   a[X] = GY85.accelerometer_x(GY85.readFromAccelerometer());
   a[Y] = GY85.accelerometer_y(GY85.readFromAccelerometer());
@@ -140,10 +173,18 @@ void takeSample() {
       aRange[MIN][i] = aRange[MAX][i] = a[i];
       gRange[MIN][i] = gRange[MAX][i] = g[i];
       mRange[MIN][i] = mRange[MAX][i] = m[i];
-      
-      aTotal[i] = a[i];
-      gTotal[i] = g[i];
-      mTotal[i] = m[i];
+
+      #if USERT > 0
+        // Initialize running totals
+        aTotal[i] = a[i];
+        gTotal[i] = g[i];
+        mTotal[i] = m[i];
+      #else
+        // Store sample
+        aSample[0][i] = a[i];
+        gSample[0][i] = g[i];
+        mSample[0][i] = m[i];
+      #endif
     }
   } else {
     for(int i = 0; i < DIM; i++) {
@@ -154,42 +195,29 @@ void takeSample() {
       if (m[i] < mRange[MIN][i]) mRange[MIN][i] = m[i];
       else if (m[i] > mRange[MAX][i]) mRange[MAX][i] = m[i];
       
-      // Add to running totals
-      aTotal[i] += a[i];
-      gTotal[i] += g[i];
-      mTotal[i] += m[i];
+      #if USERT > 0
+        // Add to running totals
+        aTotal[i] += a[i];
+        gTotal[i] += g[i];
+        mTotal[i] += m[i];
+      #else
+        // Store sample
+        aSample[samples][i] = a[i];
+        gSample[samples][i] = g[i];
+        mSample[samples][i] = m[i];
+      #endif
     }
   }
-  aRange = new int[TYPES-1][DIM];
-  gRange = new float[TYPES-1][DIM];
-  mRange = new int[TYPES-1][DIM];
-
-  // Add to running totals
-  
-  aTotal[X] += ax;
-  aTotal[Y] += ay;
-  aTotal[Z] += az;
-  gTotal[X] += gx;
-  gTotal[Y] += gy;
-  gTotal[Z] += gz;
-  mTotal[X] += mx;
-  mTotal[Y] += my;
-  mTotal[Z] += mz;
-
-  
-  aSample[samples][X] = ax;
-  aSample[samples][Y] = ay;
-  aSample[samples][Z] = az;
-  
-  gSample[samples][X] = gx;
-  gSample[samples][Y] = gy;
-  gSample[samples][Z] = gz;
-  
-  mSample[samples][X] = mx;
-  mSample[samples][Y] = my;
-  mSample[samples][Z] = mz;
   samples++;
-  
+
+  // Emergency data buffer overflow prevention, shouldn't trigger
+  if (samples == EXPECTED_SAMPLES) { // Could be >=
+    takeEntry();
+    
+    #if DEBUG > 0
+      Serial.println("Sample data buffer full, emergency dump!");
+    #endif
+  }
 }
 
 void printToFile () {
