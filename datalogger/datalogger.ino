@@ -10,6 +10,8 @@ SD card read/write
 // Includes
 #include <SPI.h>
 #include <SD.h>
+#include <GY_85.h>
+#include <Wire.h>
 
 // Debug control (>0 on, <=0 off)
 #define DEBUG 1
@@ -33,12 +35,20 @@ SD card read/write
 #define RED_LED 3
 #define YELLOW_LED 5
 #define GREEN_LED 6
+// Array Constants
+#define X 0
+#define Y 1
+#define Z 2
+#define DIM 3
+
 
 // Constants
 static String OUT_FILE_NAME = "accelbus.csv";
 static long UPDATE_INTERVAL = 2000;
 static long DATA_INTERVAL = 20;
-static int EXPECTED_ENTRIES = UPDATE_INTERVAL/DATA_INTERVAL;
+static long SAMPLE_INTERVAL = 2;
+static int EXPECTED_ENTRIES = UPDATE_INTERVAL/DATA_INTERVAL*2;
+static int EXPECTED_SAMPLES = DATA_INTERVAL/SAMPLE_INTERVAL*2;
 static String DELIMITER = ",";
 static String[] CSV_HEADERS = {"Sequence Number", "Date/Time",
   "acc_x_avg",  "acc_x_min",  "acc_x_max",  "acc_y_avg",  "acc_y_min",  "acc_y_max",  "acc_z_avg",  "acc_z_min",  "acc_z_max", 
@@ -47,6 +57,7 @@ static String[] CSV_HEADERS = {"Sequence Number", "Date/Time",
 
 // Member variables
 File outFile;
+GY_85 GY85;
 
 // Data stuff
 // Data to store: (in this order)
@@ -54,6 +65,17 @@ File outFile;
 // acc_x_avg,  acc_x_min,  acc_x_max,  acc_y_avg,  acc_y_min,  acc_y_max,  acc_z_avg,  acc_z_min,  acc_z_max, 
 // gyro_x_avg, gyro_x_min, gyro_x_max, gyro_y_avg, gyro_y_min, gyro_y_max, gyro_z_avg, gyro_z_min, gyro_z_max, 
 // mgnt_x_avg, mgnt_x_min, mgnt_x_max, mgnt_y_avg, mgnt_y_min, mgnt_y_max, mgnt_z_avg, mgnt_z_min, mgnt_z_max
+int seqnum = 1;
+int entries = 0;
+//Date[] dates    = new Date[EXPECTED_ENTRIES];
+int[][] aData   = new int[EXPECTED_ENTRIES][DIM];
+float[][] gData = new float[EXPECTED_ENTRIES][DIM];
+int[][] mData   = new int[EXPECTED_ENTRIES][DIM];
+
+int samples = 0;
+int[][] aSample   = new int[EXPECTED_SAMPLES][DIM];
+float[][] gSample = new float[EXPECTED_SAMPLES][DIM];
+int[][] mSample   = new int[EXPECTED_SAMPLES][DIM];
 
 
 void setup() {
@@ -73,6 +95,14 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
 
+}
+
+void takeEntry() {
+  
+}
+
+void takeSample() {
+  
 }
 
 void printToFile () {
