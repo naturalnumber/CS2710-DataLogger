@@ -40,6 +40,10 @@ SD card read/write
 #define Y 1
 #define Z 2
 #define DIM 3
+#define MIN 0
+#define MAX 1
+#define AVG 2
+#define TYPES 3
 
 
 // Constants
@@ -68,15 +72,28 @@ GY_85 GY85;
 int seqnum = 1;
 int entries = 0;
 //Date[] dates    = new Date[EXPECTED_ENTRIES];
-int[][] aData   = new int[EXPECTED_ENTRIES][DIM];
-float[][] gData = new float[EXPECTED_ENTRIES][DIM];
-int[][] mData   = new int[EXPECTED_ENTRIES][DIM];
+int[][][]   aData = new int[EXPECTED_ENTRIES][TYPES][DIM];
+float[][][] gData = new float[EXPECTED_ENTRIES][TYPES][DIM];
+int[][][]   mData = new int[EXPECTED_ENTRIES][TYPES][DIM]; // Previously used this * 0.92
 
+// Sampling
+int[][]   aRange = new int[TYPES-1][DIM];
+float[][] gRange = new float[TYPES-1][DIM];
+int[][]   mRange = new int[TYPES-1][DIM];
+long[]    aTotal = new long[DIM];
+double[]  gTotal = new double[DIM];
+long[]    mTotal = new long[DIM];
+
+// Maybe don't need, keep as check right now
 int samples = 0;
-int[][] aSample   = new int[EXPECTED_SAMPLES][DIM];
+int[][]   aSample = new int[EXPECTED_SAMPLES][DIM];
 float[][] gSample = new float[EXPECTED_SAMPLES][DIM];
-int[][] mSample   = new int[EXPECTED_SAMPLES][DIM];
+int[][]   mSample = new int[EXPECTED_SAMPLES][DIM];
 
+// Temp storage
+int[]   a = new int[DIM];
+float[] g = new float[DIM];
+int[]   m = new int[DIM];
 
 void setup() {
   #if DEBUG > 0
@@ -84,7 +101,11 @@ void setup() {
     // Open serial communications and wait for port to open:
     Serial.begin(9600);
   #endif
-
+  // Initialize GY_85
+  Wire.begin();
+  delay(10);
+  GY85.init();
+  delay(10);
   
   // Disable the Ethernet interface
   pinMode(ETH_LINE, OUTPUT);
@@ -102,6 +123,72 @@ void takeEntry() {
 }
 
 void takeSample() {
+  
+  a[X] = GY85.accelerometer_x(GY85.readFromAccelerometer());
+  a[Y] = GY85.accelerometer_y(GY85.readFromAccelerometer());
+  a[Z] = GY85.accelerometer_z(GY85.readFromAccelerometer());
+  g[X] = GY85.gyro_x(GY85.readGyro());
+  g[Y] = GY85.gyro_y(GY85.readGyro());
+  g[Z] = GY85.gyro_z(GY85.readGyro());
+  //float gt = GY85.temp  (GY85.readGyro());
+  m[X] = GY85.compass_x(GY85.readFromCompass()); // Want the *0.92??????
+  m[Y] = GY85.compass_y(GY85.readFromCompass());
+  m[Z] = GY85.compass_z(GY85.readFromCompass());
+
+  if (samples == 0) { // Initialize if first sample
+    for(int i = 0; i < DIM; i++) {
+      aRange[MIN][i] = aRange[MAX][i] = a[i];
+      gRange[MIN][i] = gRange[MAX][i] = g[i];
+      mRange[MIN][i] = mRange[MAX][i] = m[i];
+      
+      aTotal[i] = a[i];
+      gTotal[i] = g[i];
+      mTotal[i] = m[i];
+    }
+  } else {
+    for(int i = 0; i < DIM; i++) {
+      if (a[i] < aRange[MIN][i]) aRange[MIN][i] = a[i];
+      else if (a[i] > aRange[MAX][i]) aRange[MAX][i] = a[i];
+      if (g[i] < gRange[MIN][i]) gRange[MIN][i] = g[i];
+      else if (g[i] > gRange[MAX][i]) gRange[MAX][i] = g[i];
+      if (m[i] < mRange[MIN][i]) mRange[MIN][i] = m[i];
+      else if (m[i] > mRange[MAX][i]) mRange[MAX][i] = m[i];
+      
+      // Add to running totals
+      aTotal[i] += a[i];
+      gTotal[i] += g[i];
+      mTotal[i] += m[i];
+    }
+  }
+  aRange = new int[TYPES-1][DIM];
+  gRange = new float[TYPES-1][DIM];
+  mRange = new int[TYPES-1][DIM];
+
+  // Add to running totals
+  
+  aTotal[X] += ax;
+  aTotal[Y] += ay;
+  aTotal[Z] += az;
+  gTotal[X] += gx;
+  gTotal[Y] += gy;
+  gTotal[Z] += gz;
+  mTotal[X] += mx;
+  mTotal[Y] += my;
+  mTotal[Z] += mz;
+
+  
+  aSample[samples][X] = ax;
+  aSample[samples][Y] = ay;
+  aSample[samples][Z] = az;
+  
+  gSample[samples][X] = gx;
+  gSample[samples][Y] = gy;
+  gSample[samples][Z] = gz;
+  
+  mSample[samples][X] = mx;
+  mSample[samples][Y] = my;
+  mSample[samples][Z] = mz;
+  samples++;
   
 }
 
