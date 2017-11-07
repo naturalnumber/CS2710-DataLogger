@@ -124,6 +124,7 @@ void loop() {
 }
 
 void takeEntry() {
+  float w = 1.0 / samples;
   for(int i = 0; i < DIM; i++) {
     for(int j = 0; j < AVG; j++) {
       aData[entries][j][i] = aRange[j][i];
@@ -135,14 +136,19 @@ void takeEntry() {
 
     #if USERT > 0
       // Use running totals
-      aTotal[i] = a[i];
-      gTotal[i] = g[i];
-      mTotal[i] = m[i];
+      aData[entries][AVG][i] =  aTotal[i] * w;
+      gData[entries][AVG][i] = gTotal[i] * w;
+      mData[entries][AVG][i] = mTotal[i] * w;
     #else
       // Use samples
-      aSample[0][i] = a[i];
-      gSample[0][i] = g[i];
-      mSample[0][i] = m[i];
+      long aRT = aSample[0][i], mRT =  mSample[0][i];
+      double gRT = gSample[0][i];
+      for (int k = 1; k < samples; k++) {
+        
+      aSample[0][i];
+      gSample[0][i];
+      mSample[0][i];
+      }
     #endif
 
     
@@ -150,6 +156,10 @@ void takeEntry() {
     gData[entries][AVG][i] = ;
     mData[entries][AVG][i] = ;
   }
+  samples = 0;
+  entries++;
+  
+  if (entries == )
 }
 
 void takeSample() {
