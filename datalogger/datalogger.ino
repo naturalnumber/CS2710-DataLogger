@@ -50,11 +50,11 @@ SD card read/write
 
 // Constants
 static String OUT_FILE_NAME = "accelbus.csv";
-static long UPDATE_INTERVAL = 2000;
-static long DATA_INTERVAL = 20;
+static long WRITE_INTERVAL = 2000;
+static long ENTRY_INTERVAL = 20;
 static long SAMPLE_INTERVAL = 2;
-static int EXPECTED_ENTRIES = UPDATE_INTERVAL/DATA_INTERVAL*2;
-static int EXPECTED_SAMPLES = DATA_INTERVAL/SAMPLE_INTERVAL*2;
+static int EXPECTED_ENTRIES = WRITE_INTERVAL/ENTRY_INTERVAL*2;
+static int EXPECTED_SAMPLES = ENTRY_INTERVAL/SAMPLE_INTERVAL*2;
 static String DELIMITER = ",";
 static String[] CSV_HEADERS = {"Sequence Number", "Date/Time",
   "acc_x_avg",  "acc_x_min",  "acc_x_max",  "acc_y_avg",  "acc_y_min",  "acc_y_max",  "acc_z_avg",  "acc_z_min",  "acc_z_max", 
@@ -104,6 +104,11 @@ float[] aAvg = new float[DIM];
 float[] gAvg = new float[DIM];
 float[] mAvg = new float[DIM];
 
+long now;
+long lastSample; 
+long lastEntry;
+long lastWrite;
+
 void setup() {
   #if DEBUG > 0
     // For debugging, disable in final
@@ -119,11 +124,28 @@ void setup() {
   // Disable the Ethernet interface
   pinMode(ETH_LINE, OUTPUT);
   digitalWrite(ETH_LINE, HIGH);
+  
+  now = millis();
+  lastSample = now; 
+  lastEntry = now;
+  lastWrite = now;
 
 }
 
 void loop() {
-  
+  now = millis();
+  if (now - lastSample > SAMPLE_INTERVAL) {
+    takeSample();
+    lastSample = millis();
+  }
+  if (now - lastEntry > ENTRY_INTERVAL) {
+    takeEntry();
+    lastSample = millis();
+  }
+  if (now - lastWrite > WRITE_INTERVAL) {
+    writeToFile();
+    lastSample = millis();
+  }
 }
 
 void takeEntry() {
@@ -163,7 +185,7 @@ void takeEntry() {
   entries++;
   
   if (entries == EXPECTED_ENTRIES) { // Could be >=
-    printToFile();
+    writeToFile();
     
     #if DEBUG > 0
       Serial.println("Entry data buffer full, emergency dump!");
@@ -239,7 +261,7 @@ void takeSample() {
   }
 }
 
-void printToFile () {
+void writeToFile () {
   // Open file
   #if DEBUG > 0
     Serial.print("Initializing SD card communications...");
@@ -267,7 +289,7 @@ void printToFile () {
 
     // Print data here
     outFile.println("");
-
+    // TODO:
 
     
     // Close the file
