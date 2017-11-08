@@ -50,6 +50,7 @@ SD card read/write
 
 // Constants
 static String OUT_FILE_NAME = "accelbus.csv";
+static String DELIM = ",";
 static long WRITE_INTERVAL = 2000;
 static long ENTRY_INTERVAL = 20;
 static long SAMPLE_INTERVAL = 2;
@@ -104,10 +105,10 @@ float[] aAvg = new float[DIM];
 float[] gAvg = new float[DIM];
 float[] mAvg = new float[DIM];
 
-long now;
-long lastSample; 
-long lastEntry;
-long lastWrite;
+unsigned long now;
+unsigned long lastSample; 
+unsigned long lastEntry;
+unsigned long lastWrite;
 
 void setup() {
   #if DEBUG > 0
@@ -285,12 +286,40 @@ void writeToFile () {
       Serial.print("Writing to "+OUT_FILE_NAME+"...");
     #endif
 
+// seqnum, date/time, 
+// acc_x_avg,  acc_x_min,  acc_x_max,  acc_y_avg,  acc_y_min,  acc_y_max,  acc_z_avg,  acc_z_min,  acc_z_max, 
+// gyro_x_avg, gyro_x_min, gyro_x_max, gyro_y_avg, gyro_y_min, gyro_y_max, gyro_z_avg, gyro_z_min, gyro_z_max, 
+// mgnt_x_avg, mgnt_x_min, mgnt_x_max, mgnt_y_avg, mgnt_y_min, mgnt_y_max, mgnt_z_avg, mgnt_z_min, mgnt_z_max
+    for (int i = 0; i < entries; i++) {
+      outFile.print(String(seqnum));//+DELIM+date/Time
+
+      for(int j = 0; j < DIM; j++) {
+        outFile.print(DELIM+String(aAverage[i][j])+DELIM+aData[i][MIN][j])+DELIM+aData[i][MAX][j]));
+      }
+      for(int j = 0; j < DIM; j++) {
+        outFile.print(DELIM+String(gAverage[i][j])+DELIM+gData[i][MIN][j])+DELIM+gData[i][MAX][j]));
+      }
+      for(int j = 0; j < DIM; j++) {
+        outFile.print(DELIM+String(mAverage[i][j])+DELIM+mData[i][MIN][j])+DELIM+mData[i][MAX][j]));
+      }
+      seqnum++;
+    }
 
 
     // Print data here
     outFile.println("");
     // TODO:
 
+int seqnum = 1;
+int entries = 0;
+//Date[] dates    = new Date[EXPECTED_ENTRIES];
+int[][][]   aData = new int[EXPECTED_ENTRIES][TYPES][DIM];
+float[][][] gData = new float[EXPECTED_ENTRIES][TYPES][DIM];
+int[][][]   mData = new int[EXPECTED_ENTRIES][TYPES][DIM]; // Previously used this * 0.92
+
+float[][]   aAverage = new float[EXPECTED_ENTRIES][DIM];
+float[][] gAverage = new float[EXPECTED_ENTRIES][DIM];
+float[][]   mAverage = new float[EXPECTED_ENTRIES][DIM]; // Previously used this * 0.92
     
     // Close the file
     myFile.close();
