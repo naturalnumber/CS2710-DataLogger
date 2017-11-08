@@ -78,6 +78,10 @@ int[][][]   aData = new int[EXPECTED_ENTRIES][TYPES][DIM];
 float[][][] gData = new float[EXPECTED_ENTRIES][TYPES][DIM];
 int[][][]   mData = new int[EXPECTED_ENTRIES][TYPES][DIM]; // Previously used this * 0.92
 
+float[][]   aAverage = new float[EXPECTED_ENTRIES][DIM];
+float[][] gAverage = new float[EXPECTED_ENTRIES][DIM];
+float[][]   mAverage = new float[EXPECTED_ENTRIES][DIM]; // Previously used this * 0.92
+
 // Sampling
 int[][]   aRange = new int[TYPES-1][DIM];
 float[][] gRange = new float[TYPES-1][DIM];
@@ -119,8 +123,7 @@ void setup() {
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-
+  
 }
 
 void takeEntry() {
@@ -132,34 +135,40 @@ void takeEntry() {
       mData[entries][j][i] = mRange[j][i];
     }
 
-// Todo Here
-
     #if USERT > 0
       // Use running totals
-      aData[entries][AVG][i] =  aTotal[i] * w;
-      gData[entries][AVG][i] = gTotal[i] * w;
-      mData[entries][AVG][i] = mTotal[i] * w;
+      aAvg[i] = aTotal[i] * w;
+      gAvg[i] = gTotal[i] * w;
+      mAvg[i] = mTotal[i] * w;
     #else
       // Use samples
-      long aRT = aSample[0][i], mRT =  mSample[0][i];
-      double gRT = gSample[0][i];
+      aTotal[i] = aSample[0][i];
+      gTotal[i] = gSample[0][i];
+      mTotal[i] = mSample[0][i];
       for (int k = 1; k < samples; k++) {
-        
-      aSample[0][i];
-      gSample[0][i];
-      mSample[0][i];
+        aTotal[i] += aSample[k][i];
+        gTotal[i] += gSample[k][i];
+        mTotal[i] += mSample[k][i];
       }
+      aTotal[i] *= w;
+      gTotal[i] *= w;
+      mTotal[i] *= w;
     #endif
-
     
-    aData[entries][AVG][i] = ;
-    gData[entries][AVG][i] = ;
-    mData[entries][AVG][i] = ;
+    aData[entries][AVG][i] = aAverage[entries][i] = aTotal[i] ;
+    gData[entries][AVG][i] = gAverage[entries][i] = gTotal[i] ;
+    mData[entries][AVG][i] = mAverage[entries][i] = mTotal[i] ;
   }
   samples = 0;
   entries++;
   
-  if (entries == )
+  if (entries == EXPECTED_ENTRIES) { // Could be >=
+    printToFile();
+    
+    #if DEBUG > 0
+      Serial.println("Entry data buffer full, emergency dump!");
+    #endif
+  }
 }
 
 void takeSample() {
