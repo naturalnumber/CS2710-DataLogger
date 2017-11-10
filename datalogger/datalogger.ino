@@ -12,6 +12,7 @@ SD card read/write
 #include <SD.h>
 #include <GY_85.h>
 #include <Wire.h>
+#include <IRremote.h>
 
 // Debug control (>0 on, <=0 off)
 #define DEBUG 1
@@ -50,6 +51,9 @@ SD card read/write
 #define RANGE_SIZE TYPES*DIM
 #define SAMPLE_SIZE EXPECTED_SAMPLES*DIM
 
+// TODO: fill this in with the actual IR button
+#define OK_HEX "0x0000"
+
 // Constants
 //static String OUT_FILE_NAME = "accelbus.csv";
 static char DELIM = ',';
@@ -81,6 +85,11 @@ unsigned long lastSample;
 unsigned long lastEntry;
 unsigned long lastWrite;
 
+// IR setup
+IRrecv irrecv(IR_RECV_PIN);
+decode_results results;
+boolean isEnabled;
+
 void setup() {
   #if DEBUG > 0
     // For debugging, disable in final
@@ -92,6 +101,9 @@ void setup() {
   delay(10);
   GY85.init();
   delay(10);
+
+  // Initialize the IR sensor
+  irrecv.enableIRIn();
   
   // Disable the Ethernet interface
   pinMode(ETH_LINE, OUTPUT);
@@ -106,16 +118,36 @@ void setup() {
 }
 
 void loop() {
-  now = millis();
-  if (now - lastSample > SAMPLE_INTERVAL) {
-    takeSample();
-    lastSample = millis();
+  if(isEnabled)
+  {
+    now = millis();
+    if (now - lastSample > SAMPLE_INTERVAL) {
+      takeSample();
+      lastSample = millis();
+    }
+    if (now - lastWrite > WRITE_INTERVAL) {
+      writeToFile();
+      lastSample = millis();
+    }
   }
-  if (now - lastWrite > WRITE_INTERVAL) {
-    writeToFile();
-    lastSample = millis();
+
+  checkEnabled();
+  // sample code delays for processing IR device input
+  // dont know if it's needed
+  // might be nice to get on a timer but who knows
+  delay(200);
+}
+
+void checkEnabled()
+{
+  if (String (irrecv.decode(&results), HEX).equals(OK_HEX))
+  {
+    isEnabled = !isEnabled;
+    irrecv.resume();
   }
 }
+
+
 
 int index(int i, int j, int J, int k, int K) {
   return i*J+j*K+k;
