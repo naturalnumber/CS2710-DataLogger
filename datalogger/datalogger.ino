@@ -15,8 +15,6 @@ SD card read/write
 
 // Debug control (>0 on, <=0 off)
 #define DEBUG 1
-// Use running totals or iterative solution
-#define USERT 1
 
 // Not usable, for reference
 #define SD_MOSI 11
@@ -44,66 +42,44 @@ SD card read/write
 #define DIM 3
 #define MIN 0
 #define MAX 1
-#define AVG 2
-#define TYPES 3
+#define TYPES 2
 
+#define WRITE_INTERVAL 10
+//#define ENTRY_INTERVAL 10
+#define SAMPLE_INTERVAL 2
+
+//#define EXPECTED_ENTRIES WRITE_INTERVAL/ENTRY_INTERVAL*2
+//#define EXPECTED_SAMPLES ENTRY_INTERVAL/SAMPLE_INTERVAL*2
+//#define DATA_SIZE EXPECTED_ENTRIES*TYPES*DIM
+//#define AVERAGE_SIZE EXPECTED_ENTRIES*TYPES*DIM
+#define RANGE_SIZE TYPES*DIM
+#define SAMPLE_SIZE EXPECTED_SAMPLES*DIM
 
 // Constants
-static String OUT_FILE_NAME = "accelbus.csv";
-static String DELIM = ",";
-static long WRITE_INTERVAL = 2000;
-static long ENTRY_INTERVAL = 20;
-static long SAMPLE_INTERVAL = 2;
-static int EXPECTED_ENTRIES = WRITE_INTERVAL/ENTRY_INTERVAL*2;
-static int EXPECTED_SAMPLES = ENTRY_INTERVAL/SAMPLE_INTERVAL*2;
-static String DELIMITER = ",";
-static String[] CSV_HEADERS = {"Sequence Number", "Date/Time",
-  "acc_x_avg",  "acc_x_min",  "acc_x_max",  "acc_y_avg",  "acc_y_min",  "acc_y_max",  "acc_z_avg",  "acc_z_min",  "acc_z_max", 
-  "gyro_x_avg", "gyro_x_min", "gyro_x_max", "gyro_y_avg", "gyro_y_min", "gyro_y_max", "gyro_z_avg", "gyro_z_min", "gyro_z_max", 
-  "mgnt_x_avg", "mgnt_x_min", "mgnt_x_max", "mgnt_y_avg", "mgnt_y_min", "mgnt_y_max", "mgnt_z_avg", "mgnt_z_min", "mgnt_z_max"};
+//static String OUT_FILE_NAME = "accelbus.csv";
+static char DELIM = ',';
 
 // Member variables
 File outFile;
 GY_85 GY85;
 
-// Data stuff
-// Data to store: (in this order)
-// seqnum, date/time, 
-// acc_x_avg,  acc_x_min,  acc_x_max,  acc_y_avg,  acc_y_min,  acc_y_max,  acc_z_avg,  acc_z_min,  acc_z_max, 
-// gyro_x_avg, gyro_x_min, gyro_x_max, gyro_y_avg, gyro_y_min, gyro_y_max, gyro_z_avg, gyro_z_min, gyro_z_max, 
-// mgnt_x_avg, mgnt_x_min, mgnt_x_max, mgnt_y_avg, mgnt_y_min, mgnt_y_max, mgnt_z_avg, mgnt_z_min, mgnt_z_max
-int seqnum = 1;
-int entries = 0;
-//Date[] dates    = new Date[EXPECTED_ENTRIES];
-int[][][]   aData = new int[EXPECTED_ENTRIES][TYPES][DIM];
-float[][][] gData = new float[EXPECTED_ENTRIES][TYPES][DIM];
-int[][][]   mData = new int[EXPECTED_ENTRIES][TYPES][DIM]; // Previously used this * 0.92
-
-float[][]   aAverage = new float[EXPECTED_ENTRIES][DIM];
-float[][] gAverage = new float[EXPECTED_ENTRIES][DIM];
-float[][]   mAverage = new float[EXPECTED_ENTRIES][DIM]; // Previously used this * 0.92
+int   seqnum = 1;
 
 // Sampling
-int[][]   aRange = new int[TYPES-1][DIM];
-float[][] gRange = new float[TYPES-1][DIM];
-int[][]   mRange = new int[TYPES-1][DIM];
-long[]    aTotal = new long[DIM];
-double[]  gTotal = new double[DIM];
-long[]    mTotal = new long[DIM];
+short   aRange[RANGE_SIZE];
+float   gRange[RANGE_SIZE];
+short   mRange[RANGE_SIZE];
+short   aTotal[DIM];
+float   gTotal[DIM];
+short   mTotal[DIM];
 
 // Maybe don't need, keep as check right now
-int samples = 0;
-int[][]   aSample = new int[EXPECTED_SAMPLES][DIM];
-float[][] gSample = new float[EXPECTED_SAMPLES][DIM];
-int[][]   mSample = new int[EXPECTED_SAMPLES][DIM];
+short   samples = 0;
 
 // Temp storage
-int[]   a = new int[DIM];
-float[] g = new float[DIM];
-int[]   m = new int[DIM];
-float[] aAvg = new float[DIM];
-float[] gAvg = new float[DIM];
-float[] mAvg = new float[DIM];
+short   a[DIM];
+float   g[DIM];
+short   m[DIM];
 
 unsigned long now;
 unsigned long lastSample; 
@@ -131,6 +107,7 @@ void setup() {
   lastEntry = now;
   lastWrite = now;
 
+  initializeFile();
 }
 
 void loop() {
@@ -139,48 +116,219 @@ void loop() {
     takeSample();
     lastSample = millis();
   }
-  if (now - lastEntry > ENTRY_INTERVAL) {
-    takeEntry();
-    lastSample = millis();
-  }
   if (now - lastWrite > WRITE_INTERVAL) {
     writeToFile();
     lastSample = millis();
   }
 }
 
+int index(int i, int j, int J, int k, int K) {
+  return i*J+j*K+k;
+}
+
+int index(int i, int j, int J) {
+  return i*J+j;
+}
+
+void takeSample() {
+  #if DEBUG > 0
+    Serial.println("Taking sample "+String(samples));
+  #endif
+  
+  a[X] = GY85.accelerometer_x(GY85.readFromAccelerometer());
+  a[Y] = GY85.accelerometer_y(GY85.readFromAccelerometer());
+  a[Z] = GY85.accelerometer_z(GY85.readFromAccelerometer());
+  g[X] = GY85.gyro_x(GY85.readGyro());
+  g[Y] = GY85.gyro_y(GY85.readGyro());
+  g[Z] = GY85.gyro_z(GY85.readGyro());
+  //float gt = GY85.temp  (GY85.readGyro());
+  m[X] = GY85.compass_x(GY85.readFromCompass()); // Want the *0.92??????
+  m[Y] = GY85.compass_y(GY85.readFromCompass());
+  m[Z] = GY85.compass_z(GY85.readFromCompass());
+
+  if (samples == 0) { // Initialize if first sample
+    for(int i = 0; i < DIM; i++) {
+      aRange[index(MIN,i,DIM)] = aRange[index(MAX,i,DIM)] = a[i];
+      gRange[index(MIN,i,DIM)] = gRange[index(MAX,i,DIM)] = g[i];
+      mRange[index(MIN,i,DIM)] = mRange[index(MAX,i,DIM)] = m[i];
+
+      // Initialize running totals
+      aTotal[i] = a[i];
+      gTotal[i] = g[i];
+      mTotal[i] = m[i];
+    }
+  } else {
+    for(int i = 0; i < DIM; i++) {
+      if (a[i] < aRange[index(MIN,i,DIM)]) aRange[index(MIN,i,DIM)] = a[i];
+      else if (a[i] > aRange[index(MAX,i,DIM)]) aRange[index(MAX,i,DIM)] = a[i];
+      if (g[i] < gRange[index(MIN,i,DIM)]) gRange[index(MIN,i,DIM)] = g[i];
+      else if (g[i] > gRange[index(MAX,i,DIM)]) gRange[index(MAX,i,DIM)] = g[i];
+      if (m[i] < mRange[index(MIN,i,DIM)]) mRange[index(MIN,i,DIM)] = m[i];
+      else if (m[i] > mRange[index(MAX,i,DIM)]) mRange[index(MAX,i,DIM)] = m[i];
+      
+      // Add to running totals
+      aTotal[i] += a[i];
+      gTotal[i] += g[i];
+      mTotal[i] += m[i];
+    }
+  }
+  samples++;
+}
+
+void writeToFile () {
+  // Open file
+  #if DEBUG > 0
+    Serial.print(F("Initializing SD card communications..."));
+  #endif
+  if (!SD.begin(SD_LINE)) {
+    #if DEBUG > 0
+      Serial.println(F(" initialization failed!"));
+    #endif
+    return;
+  }
+  #if DEBUG > 0
+    Serial.println(F(" initialization done."));
+  #endif
+  
+  // Open the file
+  outFile = SD.open(F("accelbus.csv"), FILE_WRITE);
+  
+  // if the file opened okay, write to it:
+  if (outFile) {
+    #if DEBUG > 0
+      Serial.print(F("Writing to accelbus.csv..."));
+    #endif
+
+    float w = 1.0 / samples;
+    //  seqnum, date/time, 
+    //  acc_x_avg,  acc_x_min,  acc_x_max,  acc_y_avg,  acc_y_min,  acc_y_max,  acc_z_avg,  acc_z_min,  acc_z_max, 
+    //  gyro_x_avg, gyro_x_min, gyro_x_max, gyro_y_avg, gyro_y_min, gyro_y_max, gyro_z_avg, gyro_z_min, gyro_z_max, 
+    //  mgnt_x_avg, mgnt_x_min, mgnt_x_max, mgnt_y_avg, mgnt_y_min, mgnt_y_max, mgnt_z_avg, mgnt_z_min, mgnt_z_max
+
+    outFile.print(String(seqnum));//+DELIM+date/Time
+
+    for(int i = 0; i < DIM; i++) {
+      outFile.print(DELIM+String(aTotal[i] * w)+DELIM+String(aRange[index(MIN,i,DIM)])+DELIM+String(aRange[index(MAX,i,DIM)]));
+    }
+    for(int i = 0; i < DIM; i++) {
+      outFile.print(DELIM+String(gTotal[i] * w)+DELIM+String(gRange[index(MIN,i,DIM)])+DELIM+String(gRange[index(MAX,i,DIM)]));
+    }
+    for(int i = 0; i < DIM; i++) {
+      outFile.print(DELIM+String(mTotal[i] * w * 0.92)+DELIM+String(mRange[index(MIN,i,DIM)] * 0.92)+DELIM+String(mRange[index(MAX,i,DIM)] * 0.92));
+    }
+    seqnum++;
+
+    // Close the file
+    outFile.close();
+    
+    #if DEBUG > 0
+      Serial.println(F(" done."));
+    #endif
+  } else {
+    // if the file didn't open, print an error:
+    #if DEBUG > 0
+      Serial.println(F("error opening accelbus.csv"));
+    #endif
+  }
+}
+
+void initializeFile () {
+  // Open file
+  #if DEBUG > 0
+    Serial.print(F("Initializing SD card communications..."));
+  #endif
+  if (!SD.begin(SD_LINE)) {
+    #if DEBUG > 0
+      Serial.println(F(" initialization failed!"));
+    #endif
+    return;
+  }
+  #if DEBUG > 0
+    Serial.println(F(" initialization done."));
+  #endif
+  
+  // Open the file
+  outFile = SD.open(F("accelbus.csv"), FILE_WRITE);
+  
+  // if the file opened okay, write to it:
+  if (outFile) {
+    #if DEBUG > 0
+      Serial.print(F("Writing to accelbus.csv..."));
+    #endif
+
+    outFile.print(F("Sequence Number,Date/Time,acc_x_avg,acc_x_min,acc_x_max,acc_y_avg,acc_y_min,acc_y_max,acc_z_avg,acc_z_min,acc_z_max,"));
+    outFile.print(F("gyro_x_avg,gyro_x_min,gyro_x_max,gyro_y_avg,gyro_y_min,gyro_y_max,gyro_z_avg,gyro_z_min,gyro_z_max,"));
+    outFile.println(F("mgnt_x_avg,mgnt_x_min,mgnt_x_max,mgnt_y_avg,mgnt_y_min,mgnt_y_max,mgnt_z_avg,mgnt_z_min,mgnt_z_max"));
+    //  seqnum, date/time, 
+    //  acc_x_avg,  acc_x_min,  acc_x_max,  acc_y_avg,  acc_y_min,  acc_y_max,  acc_z_avg,  acc_z_min,  acc_z_max, 
+    //  gyro_x_avg, gyro_x_min, gyro_x_max, gyro_y_avg, gyro_y_min, gyro_y_max, gyro_z_avg, gyro_z_min, gyro_z_max, 
+    //  mgnt_x_avg, mgnt_x_min, mgnt_x_max, mgnt_y_avg, mgnt_y_min, mgnt_y_max, mgnt_z_avg, mgnt_z_min, mgnt_z_max
+
+    // Close the file
+    outFile.close();
+    
+    #if DEBUG > 0
+      Serial.println(F(" done."));
+    #endif
+  } else {
+    // if the file didn't open, print an error:
+    #if DEBUG > 0
+      Serial.println(F("error opening accelbus.csv"));
+    #endif
+  }
+}
+
+/*  OLD
+ *   
+#define WRITE_INTERVAL 20
+#define ENTRY_INTERVAL 10
+#define SAMPLE_INTERVAL 2
+
+#define EXPECTED_ENTRIES WRITE_INTERVAL/ENTRY_INTERVAL*2
+#define EXPECTED_SAMPLES ENTRY_INTERVAL/SAMPLE_INTERVAL*2
+#define DATA_SIZE EXPECTED_ENTRIES*TYPES*DIM
+#define AVERAGE_SIZE EXPECTED_ENTRIES*TYPES*DIM
+#define RANGE_SIZE TYPES*DIM
+#define SAMPLE_SIZE EXPECTED_SAMPLES*DIM
+
+//short entries = 0;
+//Date[] dates    = new Date[EXPECTED_ENTRIES];
+//short   aData[DATA_SIZE]; //[DATA_SIZE]; //[][][] = new int[EXPECTED_ENTRIES][TYPES][DIM];
+//float   gData[DATA_SIZE]; //[][][] = new float[EXPECTED_ENTRIES][TYPES][DIM];
+//short   mData[DATA_SIZE]; //[][][] = new int[EXPECTED_ENTRIES][TYPES][DIM]; // Previously used this * 0.92
+
+//float   aAverage[AVERAGE_SIZE]; //[][] = new float[EXPECTED_ENTRIES][DIM];
+//float   gAverage[AVERAGE_SIZE]; //[][] = new float[EXPECTED_ENTRIES][DIM];
+//float   mAverage[AVERAGE_SIZE]; //[][] = new float[EXPECTED_ENTRIES][DIM]; // Previously used this * 0.92
+
+
+//Date[] dates    = new Date[EXPECTED_ENTRIES];
+//short   aData[DATA_SIZE]; //[DATA_SIZE]; //[][][] = new int[EXPECTED_ENTRIES][TYPES][DIM];
+//float   gData[DATA_SIZE]; //[][][] = new float[EXPECTED_ENTRIES][TYPES][DIM];
+//short   mData[DATA_SIZE]; //[][][] = new int[EXPECTED_ENTRIES][TYPES][DIM]; // Previously used this * 0.92
+
+//float   aAverage[AVERAGE_SIZE]; //[][] = new float[EXPECTED_ENTRIES][DIM];
+//float   gAverage[AVERAGE_SIZE]; //[][] = new float[EXPECTED_ENTRIES][DIM];
+//float   mAverage[AVERAGE_SIZE]; //[][] = new float[EXPECTED_ENTRIES][DIM]; // Previously used this * 0.92
+//int   aSample[SAMPLE_SIZE]; //[][] = new int[EXPECTED_SAMPLES][DIM];
+//float gSample[SAMPLE_SIZE]; //[][] = new float[EXPECTED_SAMPLES][DIM];
+//int   mSample[SAMPLE_SIZE]; //[][] = new int[EXPECTED_SAMPLES][DIM];
+//float[] aAvg = new float[DIM];
+//float[] gAvg = new float[DIM];
+//float[] mAvg = new float[DIM];
+
 void takeEntry() {
   float w = 1.0 / samples;
   for(int i = 0; i < DIM; i++) {
-    for(int j = 0; j < AVG; j++) {
-      aData[entries][j][i] = aRange[j][i];
-      gData[entries][j][i] = gRange[j][i];
-      mData[entries][j][i] = mRange[j][i];
+    for(int j = 0; j < TYPES; j++) {
+      aData[index(entries,j,TYPES,i,DIM)] = aRange[index(j,i,DIM)];
+      gData[index(entries,j,TYPES,i,DIM)] = gRange[index(j,i,DIM)];
+      mData[index(entries,j,TYPES,i,DIM)] = mRange[index(j,i,DIM)];
     }
-
-    #if USERT > 0
-      // Use running totals
-      aAvg[i] = aTotal[i] * w;
-      gAvg[i] = gTotal[i] * w;
-      mAvg[i] = mTotal[i] * w;
-    #else
-      // Use samples
-      aTotal[i] = aSample[0][i];
-      gTotal[i] = gSample[0][i];
-      mTotal[i] = mSample[0][i];
-      for (int k = 1; k < samples; k++) {
-        aTotal[i] += aSample[k][i];
-        gTotal[i] += gSample[k][i];
-        mTotal[i] += mSample[k][i];
-      }
-      aTotal[i] *= w;
-      gTotal[i] *= w;
-      mTotal[i] *= w;
-    #endif
     
-    aData[entries][AVG][i] = aAverage[entries][i] = aTotal[i] ;
-    gData[entries][AVG][i] = gAverage[entries][i] = gTotal[i] ;
-    mData[entries][AVG][i] = mAverage[entries][i] = mTotal[i] ;
+    aAverage[index(entries,i,DIM)] = aTotal[i] * w ;
+    gAverage[index(entries,i,DIM)] = gTotal[i] * w ;
+    mAverage[index(entries,i,DIM)] = mTotal[i] * w ;
   }
   samples = 0;
   entries++;
@@ -212,42 +360,28 @@ void takeSample() {
 
   if (samples == 0) { // Initialize if first sample
     for(int i = 0; i < DIM; i++) {
-      aRange[MIN][i] = aRange[MAX][i] = a[i];
-      gRange[MIN][i] = gRange[MAX][i] = g[i];
-      mRange[MIN][i] = mRange[MAX][i] = m[i];
+      aRange[index(MIN,i,DIM)] = aRange[index(MAX,i,DIM)] = a[i];
+      gRange[index(MIN,i,DIM)] = gRange[index(MAX,i,DIM)] = g[i];
+      mRange[index(MIN,i,DIM)] = mRange[index(MAX,i,DIM)] = m[i];
 
-      #if USERT > 0
-        // Initialize running totals
-        aTotal[i] = a[i];
-        gTotal[i] = g[i];
-        mTotal[i] = m[i];
-      #else
-        // Store sample
-        aSample[0][i] = a[i];
-        gSample[0][i] = g[i];
-        mSample[0][i] = m[i];
-      #endif
+      // Initialize running totals
+      aTotal[i] = a[i];
+      gTotal[i] = g[i];
+      mTotal[i] = m[i];
     }
   } else {
     for(int i = 0; i < DIM; i++) {
-      if (a[i] < aRange[MIN][i]) aRange[MIN][i] = a[i];
-      else if (a[i] > aRange[MAX][i]) aRange[MAX][i] = a[i];
-      if (g[i] < gRange[MIN][i]) gRange[MIN][i] = g[i];
-      else if (g[i] > gRange[MAX][i]) gRange[MAX][i] = g[i];
-      if (m[i] < mRange[MIN][i]) mRange[MIN][i] = m[i];
-      else if (m[i] > mRange[MAX][i]) mRange[MAX][i] = m[i];
+      if (a[i] < aRange[index(MIN,i,DIM)]) aRange[index(MIN,i,DIM)] = a[i];
+      else if (a[i] > aRange[index(MAX,i,DIM)]) aRange[index(MAX,i,DIM)] = a[i];
+      if (g[i] < gRange[index(MIN,i,DIM)]) gRange[index(MIN,i,DIM)] = g[i];
+      else if (g[i] > gRange[index(MAX,i,DIM)]) gRange[index(MAX,i,DIM)] = g[i];
+      if (m[i] < mRange[index(MIN,i,DIM)]) mRange[index(MIN,i,DIM)] = m[i];
+      else if (m[i] > mRange[index(MAX,i,DIM)]) mRange[index(MAX,i,DIM)] = m[i];
       
-      #if USERT > 0
-        // Add to running totals
-        aTotal[i] += a[i];
-        gTotal[i] += g[i];
-        mTotal[i] += m[i];
-      #else
-        // Store sample
-        aSample[samples][i] = a[i];
-        gSample[samples][i] = g[i];
-        mSample[samples][i] = m[i];
-      #endif
+      // Add to running totals
+      aTotal[i] += a[i];
+      gTotal[i] += g[i];
+      mTotal[i] += m[i];
     }
   }
   samples++;
@@ -262,76 +396,20 @@ void takeSample() {
   }
 }
 
-void writeToFile () {
-  // Open file
-  #if DEBUG > 0
-    Serial.print("Initializing SD card communications...");
-  #endif
-  if (!SD.begin(SD_LINE)) {
-    #if DEBUG > 0
-      Serial.println(" initialization failed!");
-    #endif
-    return;
-  }
-  #if DEBUG > 0
-    Serial.println(" initialization done.");
-  #endif
-  
-  // Open the file
-  outFile = SD.open(OUT_FILE_NAME, FILE_WRITE);
-  
-  // if the file opened okay, write to it:
-  if (outFile) {
-    #if DEBUG > 0
-      Serial.print("Writing to "+OUT_FILE_NAME+"...");
-    #endif
 
-// seqnum, date/time, 
-// acc_x_avg,  acc_x_min,  acc_x_max,  acc_y_avg,  acc_y_min,  acc_y_max,  acc_z_avg,  acc_z_min,  acc_z_max, 
-// gyro_x_avg, gyro_x_min, gyro_x_max, gyro_y_avg, gyro_y_min, gyro_y_max, gyro_z_avg, gyro_z_min, gyro_z_max, 
-// mgnt_x_avg, mgnt_x_min, mgnt_x_max, mgnt_y_avg, mgnt_y_min, mgnt_y_max, mgnt_z_avg, mgnt_z_min, mgnt_z_max
+    /*
     for (int i = 0; i < entries; i++) {
       outFile.print(String(seqnum));//+DELIM+date/Time
 
       for(int j = 0; j < DIM; j++) {
-        outFile.print(DELIM+String(aAverage[i][j])+DELIM+aData[i][MIN][j])+DELIM+aData[i][MAX][j]));
+        outFile.print(DELIM+String(aAverage[index(i,j,DIM)])+DELIM+String(aData[index(i,MIN,TYPES,j,DIM)])+DELIM+String(aData[index(i,MAX,TYPES,j,DIM)]));
       }
       for(int j = 0; j < DIM; j++) {
-        outFile.print(DELIM+String(gAverage[i][j])+DELIM+gData[i][MIN][j])+DELIM+gData[i][MAX][j]));
+        outFile.print(DELIM+String(gAverage[index(i,j,DIM)])+DELIM+String(gData[index(i,MIN,TYPES,j,DIM)])+DELIM+String(gData[index(i,MAX,TYPES,j,DIM)]));
       }
       for(int j = 0; j < DIM; j++) {
-        outFile.print(DELIM+String(mAverage[i][j])+DELIM+mData[i][MIN][j])+DELIM+mData[i][MAX][j]));
+        outFile.print(DELIM+String(mAverage[index(i,j,DIM)])+DELIM+String(mData[index(i,MIN,TYPES,j,DIM)])+DELIM+String(mData[index(i,MAX,TYPES,j,DIM)]));
       }
       seqnum++;
     }
-
-
-    // Print data here
-    outFile.println("");
-    // TODO:
-
-int seqnum = 1;
-int entries = 0;
-//Date[] dates    = new Date[EXPECTED_ENTRIES];
-int[][][]   aData = new int[EXPECTED_ENTRIES][TYPES][DIM];
-float[][][] gData = new float[EXPECTED_ENTRIES][TYPES][DIM];
-int[][][]   mData = new int[EXPECTED_ENTRIES][TYPES][DIM]; // Previously used this * 0.92
-
-float[][]   aAverage = new float[EXPECTED_ENTRIES][DIM];
-float[][] gAverage = new float[EXPECTED_ENTRIES][DIM];
-float[][]   mAverage = new float[EXPECTED_ENTRIES][DIM]; // Previously used this * 0.92
-    
-    // Close the file
-    myFile.close();
-    
-    #if DEBUG > 0
-      Serial.println(" done.");
-    #endif
-  } else {
-    // if the file didn't open, print an error:
-    #if DEBUG > 0
-      Serial.println("error opening "+OUT_FILE_NAME);
-    #endif
-  }
-}
-
+ */
