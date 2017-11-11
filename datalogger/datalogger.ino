@@ -150,7 +150,7 @@ void checkEnabled()
 
 
 int index(int i, int j, int J, int k, int K) {
-  return i*J+j*K+k;
+  return (i*J+j)*K+k;
 }
 
 int index(int i, int j, int J) {
