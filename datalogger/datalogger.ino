@@ -52,7 +52,7 @@ SD card read/write
 #define SAMPLE_SIZE EXPECTED_SAMPLES*DIM
 
 // TODO: fill this in with the actual IR button
-#define OK_HEX "0x0000"
+#define OK_HEX "ff02fd"
 
 // Constants
 //static String OUT_FILE_NAME = "accelbus.csv";
@@ -140,10 +140,13 @@ void loop() {
 
 void checkEnabled()
 {
-  if (String (irrecv.decode(&results), HEX).equals(OK_HEX))
+  if (irrecv.decode(&results))
   {
-    isEnabled = !isEnabled;
-    irrecv.resume();
+    if (String(results.value, HEX).equals(OK_HEX))
+    {
+      isEnabled = !isEnabled;
+      irrecv.resume();
+    }
   }
 }
 
