@@ -49,8 +49,7 @@ SD card read/write
 #define DIM 3
 #define MIN 0
 #define MAX 1
-#define TOT 2
-#define TYPES 3
+#define TYPES 2
 // Data array variables
 #define RANGE_SIZE TYPES*DIM
 
@@ -104,9 +103,9 @@ boolean isEnabled;
 int     aRange[RANGE_SIZE]; //  * 0.0039
 float   gRange[RANGE_SIZE]; //  
 int     mRange[RANGE_SIZE]; //  * 0.92
-//int   aTotal[DIM]; //  * 0.0039
-//float   gTotal[DIM]; //  
-//int   mTotal[DIM]; //  * 0.92
+long    aTotal[DIM]; //  * 0.0039
+float   gTotal[DIM]; //  
+long    mTotal[DIM]; //  * 0.92
 
 // Maybe don't need, keep as check right now
 short   samples = 0;
@@ -311,26 +310,30 @@ void takeSample() {
 
   if (samples == 0) { // Initialize if first sample
     for(int i = 0; i < DIM; i++) {
-      aRange[index(TOT,i,DIM)] = aRange[index(MIN,i,DIM)] = aRange[index(MAX,i,DIM)] = a[i];
-      gRange[index(TOT,i,DIM)] = gRange[index(MIN,i,DIM)] = gRange[index(MAX,i,DIM)] = g[i];
-      mRange[index(TOT,i,DIM)] = mRange[index(MIN,i,DIM)] = mRange[index(MAX,i,DIM)] = m[i];
+      aRange[index(MIN,i,DIM)] = aRange[index(MAX,i,DIM)] = a[i];
+      gRange[index(MIN,i,DIM)] = gRange[index(MAX,i,DIM)] = g[i];
+      mRange[index(MIN,i,DIM)] = mRange[index(MAX,i,DIM)] = m[i];
+      
+      // Initialize running totals
+      aTotal[i] = a[i];
+      gTotal[i] = g[i];
+      mTotal[i] = m[i];
     }
   } else {
     for(int i = 0; i < DIM; i++) {
       if (a[i] < aRange[index(MIN,i,DIM)]) aRange[index(MIN,i,DIM)] = a[i];
       else if (a[i] > aRange[index(MAX,i,DIM)]) aRange[index(MAX,i,DIM)] = a[i];
 
-      //if (g[i] != 0) // This and m
-        if (g[i] < gRange[index(MIN,i,DIM)]) gRange[index(MIN,i,DIM)] = g[i];
-        else if (g[i] > gRange[index(MAX,i,DIM)]) gRange[index(MAX,i,DIM)] = g[i];
+      if (g[i] < gRange[index(MIN,i,DIM)]) gRange[index(MIN,i,DIM)] = g[i];
+      else if (g[i] > gRange[index(MAX,i,DIM)]) gRange[index(MAX,i,DIM)] = g[i];
       
       if (m[i] < mRange[index(MIN,i,DIM)]) mRange[index(MIN,i,DIM)] = m[i];
       else if (m[i] > mRange[index(MAX,i,DIM)]) mRange[index(MAX,i,DIM)] = m[i];
       
       // Add to running totals
-      aRange[index(TOT,i,DIM)] += a[i];
-      gRange[index(TOT,i,DIM)] += g[i];
-      mRange[index(TOT,i,DIM)] += m[i];
+      aTotal[i] += a[i];
+      gTotal[i] += g[i];
+      mTotal[i] += m[i];
     }
   }
   samples++;
@@ -380,19 +383,19 @@ void writeToFile () {
     for(int i = 0; i < DIM; i++) {
       //outFile.print(DELIM+String(aTotal[i] * w * 0.0039)+DELIM+String(aRange[index(MIN,i,DIM)] * 0.0039)+DELIM+String(aRange[index(MAX,i,DIM)] * 0.0039));
       outFile.print(DELIM);
-      dtostrf(aRange[index(TOT,i,DIM)] * w * 0.0039f, SF_LENGTH, SF_PLACES, sBuffer);
+      dtostrf(aTotal[i] * w * 0.076640256f, SF_LENGTH, SF_PLACES, sBuffer);
       outFile.print(sBuffer); // aTotal[i]
       outFile.print(DELIM);
-      dtostrf(aRange[index(MIN,i,DIM)] * 0.0039f, SF_LENGTH, SF_PLACES, sBuffer);
+      dtostrf(aRange[index(MIN,i,DIM)] * 0.076640625f, SF_LENGTH, SF_PLACES, sBuffer);
       outFile.print(sBuffer);
       outFile.print(DELIM);
-      dtostrf(aRange[index(MAX,i,DIM)] * 0.0039f, SF_LENGTH, SF_PLACES, sBuffer);
+      dtostrf(aRange[index(MAX,i,DIM)] * 0.076640625f, SF_LENGTH, SF_PLACES, sBuffer);
       outFile.print(sBuffer);
     }
     for(int i = 0; i < DIM; i++) {
       //outFile.print(DELIM+String(gTotal[i] * w)+DELIM+String(gRange[index(MIN,i,DIM)])+DELIM+String(gRange[index(MAX,i,DIM)]));
       outFile.print(DELIM);
-      dtostrf(gRange[index(TOT,i,DIM)] * w, SF_LENGTH, SF_PLACES, sBuffer);
+      dtostrf(gTotal[i] * w, SF_LENGTH, SF_PLACES, sBuffer);
       outFile.print(sBuffer); // gTotal[i]
       outFile.print(DELIM);
       dtostrf(gRange[index(MIN,i,DIM)], SF_LENGTH, SF_PLACES, sBuffer);
@@ -404,7 +407,7 @@ void writeToFile () {
     for(int i = 0; i < DIM; i++) {
       //outFile.print(DELIM+String(mTotal[i] * w * 0.92)+DELIM+String(mRange[index(MIN,i,DIM)] * 0.92)+DELIM+String(mRange[index(MAX,i,DIM)] * 0.92));
       outFile.print(DELIM);
-      dtostrf(mRange[index(TOT,i,DIM)] * w * 0.92f, SF_LENGTH, SF_PLACES, sBuffer);
+      dtostrf(mTotal[i] * w * 0.92f, SF_LENGTH, SF_PLACES, sBuffer);
       outFile.print(sBuffer); // mTotal[i]
       outFile.print(DELIM);
       dtostrf(mRange[index(MIN,i,DIM)] * 0.92f, SF_LENGTH, SF_PLACES, sBuffer);
@@ -414,7 +417,8 @@ void writeToFile () {
       outFile.print(sBuffer);
     }
     
-    outFile.println();
+    outFile.print(DELIM);
+    outFile.println(samples);
     seqnum++;
 
     // Close the file
@@ -449,9 +453,11 @@ void initializeFile () {
     Serial.println(F(" initialization done."));
   #endif
 
-  if (SD.exists(OUT_FILE_NAME)) {
-    SD.remove(OUT_FILE_NAME);
-  }
+  #if DEBUG < 1
+    if (SD.exists(OUT_FILE_NAME)) {
+      SD.remove(OUT_FILE_NAME);
+    }
+  #endif
   
   // Open the file
   outFile = SD.open(OUT_FILE_NAME, O_CREAT | O_WRITE); //FILE_WRITE);
@@ -464,7 +470,7 @@ void initializeFile () {
 
     outFile.print(F("Sequence Number,Date/Time,acc_x_avg,acc_x_min,acc_x_max,acc_y_avg,acc_y_min,acc_y_max,acc_z_avg,acc_z_min,acc_z_max,"));
     outFile.print(F("gyro_x_avg,gyro_x_min,gyro_x_max,gyro_y_avg,gyro_y_min,gyro_y_max,gyro_z_avg,gyro_z_min,gyro_z_max,"));
-    outFile.println(F("mgnt_x_avg,mgnt_x_min,mgnt_x_max,mgnt_y_avg,mgnt_y_min,mgnt_y_max,mgnt_z_avg,mgnt_z_min,mgnt_z_max"));
+    outFile.println(F("mgnt_x_avg,mgnt_x_min,mgnt_x_max,mgnt_y_avg,mgnt_y_min,mgnt_y_max,mgnt_z_avg,mgnt_z_min,mgnt_z_max,samples"));
     //  seqnum, date/time, 
     //  acc_x_avg,  acc_x_min,  acc_x_max,  acc_y_avg,  acc_y_min,  acc_y_max,  acc_z_avg,  acc_z_min,  acc_z_max, 
     //  gyro_x_avg, gyro_x_min, gyro_x_max, gyro_y_avg, gyro_y_min, gyro_y_max, gyro_z_avg, gyro_z_min, gyro_z_max, 
